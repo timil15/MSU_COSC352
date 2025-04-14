@@ -1,0 +1,79 @@
+import http.client
+from html.parser import HTMLParser
+import csv
+def download_html(url):
+    domain = url.split('/')[2]
+    path = '/' + '/'.join(url.split('/')[3:])
+   
+    conn = http.client.HTTPSConnection(domain)
+   
+    conn.request("GET", path)
+   
+    response = conn.getresponse()
+    html_content = response.read().decode('utf-8')
+   
+    return html_content
+ 
+
+class TableParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.tables = []
+        self.current_table = None
+        self.current_row = None
+        self.in_table = False
+        self.in_row = False
+        self.in_cell = False
+ 
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "table":
+            self.in_table = True
+            self.current_table = []
+        elif tag == "tr" and self.in_table:
+            self.in_row = True
+            self.current_row = []
+        elif tag == "td" and self.in_row:
+            self.in_cell = True
+ 
+
+    def handle_endtag(self, tag):
+        if tag == "table" and self.in_table:
+            self.tables.append(self.current_table)
+            self.in_table = False
+        elif tag == "tr" and self.in_row:
+            self.in_row = False
+            if self.current_row:
+                self.current_table.append(self.current_row)
+        elif tag == "td" and self.in_cell:
+            self.in_cell = False
+ 
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.current_row.append(data.strip())
+ 
+
+def write_table_to_csv(table, index):
+    filename = f"table_{index}.csv"
+    with open(filename, mode="w", newline="") as file:
+        writer = csv.writer(file)
+        for row in table:
+            writer.writerow(row)
+ 
+
+def extract_tables():
+    url = "https://en.wikipedia.org/wiki/List_of_largest_companies_in_the_United_States_by_revenue"
+   
+    html_content = download_html(url)
+   
+    parser = TableParser()
+    parser.feed(html_content)
+   
+    for i, table in enumerate(parser.tables, start=1):
+        write_table_to_csv(table, i)
+        print(f"table_{i}.csv created.")
+ 
+
+if __name__ == "__main__":
+    extract_tables()
